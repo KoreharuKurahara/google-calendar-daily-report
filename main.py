@@ -48,21 +48,27 @@ def post_to_slack(message, channel=None):
 # post_to_slack(report_text)
 
 if __name__ == "__main__":
-    # 認証
-    from google.oauth2 import service_account
-    from googleapiclient.discovery import build
 
+    # OAuth認証（refresh_token自動利用）
+    from google.oauth2.credentials import Credentials
+    from google.auth.transport.requests import Request
+
+    TOKEN_PATH = 'token.json'
     SCOPES = ['https://www.googleapis.com/auth/calendar.readonly']
-    SERVICE_ACCOUNT_FILE = 'serviceaccount-credentials.json'  # Lambdaなら環境変数やSecrets Manager経由で取得
-
-    credentials = service_account.Credentials.from_service_account_file(
-        SERVICE_ACCOUNT_FILE, scopes=SCOPES)
-
-    service = build('calendar', 'v3', credentials=credentials)
-    # flow = InstalledAppFlow.from_client_secrets_file(
-    #     'credentials.json', SCOPES)
-    # creds = flow.run_local_server(port=8080)
-    # service = build('calendar', 'v3', credentials=creds)
+    creds = None
+    if os.path.exists(TOKEN_PATH):
+        creds = Credentials.from_authorized_user_file(TOKEN_PATH, SCOPES)
+    # 有効なトークンがなければ手動認証
+    if not creds or not creds.valid:
+        if creds and creds.expired and creds.refresh_token:
+            creds.refresh(Request())
+        else:
+            flow = InstalledAppFlow.from_client_secrets_file('credentials.json', SCOPES)
+            creds = flow.run_local_server(port=8080)
+        # トークン保存
+        with open(TOKEN_PATH, 'w') as token:
+            token.write(creds.to_json())
+    service = build('calendar', 'v3', credentials=creds)
 
     # 日付指定（例: コマンドライン引数 or 入力）
     import sys
@@ -102,7 +108,7 @@ if __name__ == "__main__":
             color_name = color_settings.get(str(color_id), f'color_{color_id}')
             cal_id = event.get('calendarId', '')
             event_type = event.get('eventType', 'default')
-            print(f"- {start} ～ {end} ({duration:.0f}分) : {summary} [Color: {color_name}] [Calendar: {cal_id}] [EventType: {event_type}]")
+            # print(f"- {start} ～ {end} ({duration:.0f}分) : {summary} [Color: {color_name}] [Calendar: {cal_id}] [EventType: {event_type}]")
         # color名ごとに集計（EventTypeがdefaultのもののみ）
             if event_type == 'default':
                 colorname_duration[color_name] = colorname_duration.get(color_name, 0) + duration        
