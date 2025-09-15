@@ -1,0 +1,107 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: |
+  Googleカレンダー日報自動Slack投稿システム用インフラ（Lambda+EventBridge+IAM）
+  アカウントID: 695688866317
+
+Parameters:
+  LambdaFunctionName:
+    Type: String
+    Default: google-calendar-daily-report
+  LambdaHandler:
+    Type: String
+    Default: lambda_function.lambda_handler
+  LambdaRuntime:
+    Type: String
+    Default: python3.8
+  ScheduleExpression:
+    Type: String
+    Default: 'cron(0 0 9 * * ? *)' # 毎日9時
+
+Resources:
+  CommonTags:
+    Type: AWS::CloudFormation::Stack
+    Properties:
+      Tags:
+        - Key: Billing
+          Value: Kurahara
+  LambdaExecutionRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: [lambda.amazonaws.com]
+            Action: ['sts:AssumeRole']
+      Path: "/"
+      Policies:
+        - PolicyName: LambdaBasicExecution
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - logs:CreateLogGroup
+                  - logs:CreateLogStream
+                  - logs:PutLogEvents
+                Resource: "arn:aws:logs:*:*:*"
+              - Effect: Allow
+                Action:
+                  - secretsmanager:GetSecretValue
+                  - s3:GetObject
+                Resource: "*"
+      Tags:
+        - Key: Billing
+          Value: Kurahara
+
+  LambdaFunction:
+    Type: AWS::Lambda::Function
+    Properties:
+      FunctionName: !Ref LambdaFunctionName
+      Handler: !Ref LambdaHandler
+      Role: !GetAtt LambdaExecutionRole.Arn
+      Runtime: !Ref LambdaRuntime
+      Timeout: 60
+      MemorySize: 256
+      Environment:
+        Variables:
+          TZ: 'Asia/Tokyo'
+      Code:
+        S3Bucket: 'your-lambda-code-bucket' # アップロード先に合わせて修正
+        S3Key: 'your-lambda-code.zip'       # アップロード先に合わせて修正
+      Tags:
+        - Key: Billing
+          Value: Kurahara
+
+  EventBridgeRule:
+    Type: AWS::Events::Rule
+    Properties:
+      Name: !Sub "${LambdaFunctionName}-schedule"
+      ScheduleExpression: !Ref ScheduleExpression
+      State: ENABLED
+      Targets:
+        - Arn: !GetAtt LambdaFunction.Arn
+          Id: LambdaTarget
+      Tags:
+        - Key: Billing
+          Value: Kurahara
+
+  LambdaInvokePermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName: !Ref LambdaFunction
+      Action: 'lambda:InvokeFunction'
+      Principal: 'events.amazonaws.com'
+      SourceArn: !GetAtt EventBridgeRule.Arn
+      Tags:
+        - Key: Billing
+          Value: Kurahara
+
+Outputs:
+  LambdaFunctionArn:
+    Description: Lambda関数のARN
+    Value: !GetAtt LambdaFunction.Arn
+  EventBridgeRuleName:
+    Description: EventBridgeルール名
+    Value: !Ref EventBridgeRule
