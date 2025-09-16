@@ -20,7 +20,7 @@ pip install --target ./vendor -r requirements.txt
 cd vendor
 zip -r9 ../$ZIP_FILE .
 cd ..
-zip -g $ZIP_FILE main.py color-settings.json
+zip -g $ZIP_FILE lambda_function.py color-settings.json
 # zip内容確認用（デバッグ用）
 # unzip -l $ZIP_FILE
 
