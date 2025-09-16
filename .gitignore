@@ -1,6 +1,12 @@
+# Python virtualenv
+venv/
+# Lambda vendor packages
+vendor/
 venv/
 .env
 credentials.json
 serviceaccount-credentials.json
 token.json
 color-settings.json
+lambda_function.zip
+.DS_Store
