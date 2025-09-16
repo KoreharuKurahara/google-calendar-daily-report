@@ -58,11 +58,11 @@ def get_google_service():
     import base64
     TOKEN_PATH = 'token.json'
     creds = None
-    # Lambda環境判定: AWS_LAMBDA_FUNCTION_NAMEが環境変数にあればLambda
     is_lambda = os.getenv('AWS_LAMBDA_FUNCTION_NAME') is not None
     credentials_json = None
+    token_json = None
     if is_lambda:
-        # Secrets Managerから取得
+        # credentials.json取得
         secret_name = os.getenv('GOOGLE_CREDENTIALS_SECRET_NAME', 'kurahara-google-calendar-daily-report-credentials')
         region_name = os.getenv('AWS_REGION', 'ap-northeast-1')
         session = boto3.session.Session()
@@ -79,16 +79,31 @@ def get_google_service():
         with open(credentials_path, 'w') as f:
             f.write(credentials_json)
         credentials_file = credentials_path
+        # token.json取得
+        token_secret_name = os.getenv('GOOGLE_TOKEN_SECRET_NAME', 'kurahara-google-calendar-daily-report-token')
+        try:
+            get_token_response = client.get_secret_value(SecretId=token_secret_name)
+            if 'SecretString' in get_token_response:
+                token_json = get_token_response['SecretString']
+            else:
+                token_json = base64.b64decode(get_token_response['SecretBinary']).decode('utf-8')
+            token_path = '/tmp/token.json'
+            with open(token_path, 'w') as f:
+                f.write(token_json)
+            token_file = token_path
+        except Exception as e:
+            raise RuntimeError('Lambda実行時はtoken.jsonをSecrets Managerに登録し、GOOGLE_TOKEN_SECRET_NAMEで参照してください')
     else:
         credentials_file = 'credentials.json'
-    if os.path.exists(TOKEN_PATH):
-        creds = Credentials.from_authorized_user_file(TOKEN_PATH, SCOPES)
-    if not creds or not creds.valid:
-        if creds and creds.expired and creds.refresh_token:
-            creds.refresh(Request())
-        else:
-            flow = InstalledAppFlow.from_client_secrets_file(credentials_file, SCOPES)
-            creds = flow.run_local_server(port=8080)
+        token_file = TOKEN_PATH
+    if os.path.exists(token_file):
+        creds = Credentials.from_authorized_user_file(token_file, SCOPES)
+    else:
+        if is_lambda:
+            raise RuntimeError('Lambda実行時はtoken.jsonが必須です。ローカルで認証しSecrets Managerに登録してください')
+        from google_auth_oauthlib.flow import InstalledAppFlow
+        flow = InstalledAppFlow.from_client_secrets_file(credentials_file, SCOPES)
+        creds = flow.run_local_server(port=8080)
         with open(TOKEN_PATH, 'w') as token:
             token.write(creds.to_json())
     service = build('calendar', 'v3', credentials=creds)
