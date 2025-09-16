@@ -3,3 +3,4 @@ venv/
 credentials.json
 serviceaccount-credentials.json
 token.json
+color-settings.json
