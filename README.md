@@ -17,7 +17,7 @@ Googleカレンダーの予定から作業工数を自動集計し、Slackに日
 	# または
 	pip install google-api-python-client google-auth-httplib2 google-auth-oauthlib slack_sdk python-dotenv
 	```
-3. `.env`ファイル例
+3. `.env`ファイル例（ローカル用）
 	```env
 	GOOGLE_CLIENT_ID=...
 	GOOGLE_CLIENT_SECRET=...
@@ -26,13 +26,19 @@ Googleカレンダーの予定から作業工数を自動集計し、Slackに日
 	PRIVATE_CALENDAR_ID=yyy@group.calendar.google.com
 	SLACK_BOT_TOKEN=xoxb-...
 	SLACK_CHANNEL_ID=Cxxxxxxx
+	AWS_PROFILE=your-aws-profile
+	AWS_REGION=ap-northeast-1
+	GOOGLE_CREDENTIALS_SECRET_NAME=kurahara-google-calendar-daily-report-credentials
+	GOOGLE_TOKEN_SECRET_NAME=kurahara-google-calendar-daily-report-token
 	```
 4. `color-settings.json`でcolorId→日本語名変換を定義
 5. Google CloudでOAuth認証情報を作成し、初回のみ手動認証→`token.json`保存
+	- ローカルで`python lambda_function.py`を実行し、認証フローを完了させて`token.json`を生成
+	- `credentials.json`と`token.json`はAWS Secrets Managerに登録（Lambda用）
 
 ## 使い方
 ```sh
-python main.py 2025-09-15
+python lambda_function.py 2025-09-15
 ```
 指定日付の予定を取得し、色ごとに工数を集計してSlackに投稿します。
 
@@ -49,8 +55,25 @@ python main.py 2025-09-15
 ## 色設定
 - `color-settings.json`でcolorIdごとの分類名を自由に編集可能
 
-## Lambda運用
+
+## Lambda運用・デプロイ
 - AWS Lambdaでの定期実行も可能。Secrets Managerや環境変数で認証情報を安全に管理してください。
+- Lambda用のSecrets Manager登録例：
+	- `kurahara-google-calendar-daily-report-credentials`（credentials.jsonの内容）
+	- `kurahara-google-calendar-daily-report-token`（token.jsonの内容）
+- Lambdaの環境変数に以下を設定
+	- `GOOGLE_CREDENTIALS_SECRET_NAME`、`GOOGLE_TOKEN_SECRET_NAME`、`PUBLIC_CALENDAR_ID`、`PRIVATE_CALENDAR_ID`、`SLACK_BOT_TOKEN`、`SLACK_CHANNEL_ID`、`AWS_REGION`
+- Lambdaのハンドラは`lambda_function.lambda_handler`に設定
+- Lambda実行ロールにはSecrets ManagerのGetSecretValue権限が必要
+- デプロイは`deploy.sh`でzip化し、認証情報ファイルはzipに含めないこと（セキュリティ上必須）
+
+---
+
+---
+
+### セキュリティ注意
+- `credentials.json`や`token.json`は絶対にリポジトリやデプロイzipに含めないこと
+- Secrets Manager運用を徹底
 
 ---
 
